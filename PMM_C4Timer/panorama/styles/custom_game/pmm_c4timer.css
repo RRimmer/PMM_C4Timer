@@ -1,0 +1,655 @@
+/* ============================================================
+   PMM_C4Timer 0.1.0 - C4 timer on the HUD
+   Layout: pmm_c4timer.xml (tools/gen_layout.py). Ladders: pmm_c4timer_ladder.css.
+
+   Classes the plugin toggles on #c4-root (global) and #c4-prev (per player):
+     c4-on                 the timer is shown
+     c4-mute               (per player) this player does not see it
+     st-1 ... st-9         style
+     pos-top|radar|cross|bottom|right   position
+     ph-ok / ph-warn / ph-crit          colour phase (>= 20 s / >= 10 s / < 10 s)
+     late5 / late10        less than 5 / 10 s left: no time to defuse with / without a kit
+     defusing, kit, def-ok / def-late   someone defuses, with a kit, will / will not make it
+     pK, dK, mk5-K, mk10-K ladders (pmm_c4timer_ladder.css)
+   ============================================================ */
+
+.c4-screen
+{
+	width: 100%;
+	height: 100%;
+	z-index: 99999;
+}
+
+/* ---------------- root and positions ---------------- */
+
+.c4-root
+{
+	width: fit-children;
+	height: fit-children;
+	visibility: collapse;
+	horizontal-align: center;
+	vertical-align: top;
+	margin-top: 86px;
+	margin-bottom: 0px;
+	margin-left: 0px;
+	margin-right: 0px;
+}
+
+.c4-root.c4-on
+{
+	visibility: visible;
+}
+
+.c4-root.c4-on.c4-mute
+{
+	visibility: collapse;
+}
+
+/* A: under the players / round timer */
+.c4-root.pos-top
+{
+	horizontal-align: center;
+	vertical-align: top;
+	margin-top: 86px;
+	margin-bottom: 0px;
+	margin-left: 0px;
+	margin-right: 0px;
+}
+
+/* B: under the radar */
+.c4-root.pos-radar
+{
+	horizontal-align: left;
+	vertical-align: top;
+	margin-top: 300px;
+	margin-bottom: 0px;
+	margin-left: 24px;
+	margin-right: 0px;
+}
+
+/* C: below the crosshair */
+.c4-root.pos-cross
+{
+	horizontal-align: center;
+	vertical-align: center;
+	margin-top: 150px;
+	margin-bottom: 0px;
+	margin-left: 0px;
+	margin-right: 0px;
+}
+
+/* D: bottom centre, above HP / ammo line */
+.c4-root.pos-bottom
+{
+	horizontal-align: center;
+	vertical-align: bottom;
+	margin-top: 0px;
+	margin-bottom: 120px;
+	margin-left: 0px;
+	margin-right: 0px;
+}
+
+/* E: right side */
+.c4-root.pos-right
+{
+	horizontal-align: right;
+	vertical-align: center;
+	margin-top: 0px;
+	margin-bottom: 0px;
+	margin-left: 0px;
+	margin-right: 24px;
+}
+
+/* ---------------- style switch ---------------- */
+
+.c4-s
+{
+	visibility: collapse;
+}
+
+.c4-root.st-1 .c4-s1,
+.c4-root.st-2 .c4-s2,
+.c4-root.st-3 .c4-s3,
+.c4-root.st-4 .c4-s4,
+.c4-root.st-5 .c4-s5,
+.c4-root.st-6 .c4-s6,
+.c4-root.st-8 .c4-s8,
+.c4-root.st-9 .c4-s9
+{
+	visibility: visible;
+}
+
+/* ---------------- common parts ---------------- */
+
+.c4-box
+{
+	flow-children: right;
+	padding: 6px 12px 6px 12px;
+	background-color: #0e1116d0;
+	border-radius: 6px;
+}
+
+.c4-col
+{
+	flow-children: down;
+}
+
+.c4-row
+{
+	width: 100%;
+	height: fit-children;
+	flow-children: right;
+}
+
+.c4-row.c4-center
+{
+	width: fit-children;
+	horizontal-align: center;
+}
+
+.c4-grow
+{
+	width: fill-parent-flow( 1.0 );
+	height: 4px;
+}
+
+.c4-tag
+{
+	font-size: 15px;
+	color: #fac775;
+	vertical-align: center;
+	margin-right: 4px;
+}
+
+.c4-red
+{
+	color: #f09595;
+}
+
+.c4-ic
+{
+	width: 20px;
+	height: 20px;
+	vertical-align: center;
+	background-size: 100% 100%;
+	background-repeat: no-repeat;
+}
+
+.c4-ic-bomb
+{
+	background-image: url( "s2r://panorama/images/icons/ui/bomb_c4.vsvg" );
+	wash-color: #e24b4a;
+}
+
+.c4-ic-white
+{
+	wash-color: #ffffff;
+}
+
+.c4-ic-kit
+{
+	background-image: url( "s2r://panorama/images/icons/equipment/defuser.vsvg" );
+	wash-color: #85b7eb;
+}
+
+.c4-track
+{
+	width: 100%;
+	height: 6px;
+	border-radius: 3px;
+	background-color: #444441;
+}
+
+/* every fill is clipped, never resized: a text update does not restart a clip transition */
+.c4-fh,
+.c4-fv,
+.c4-dfill
+{
+	width: 100%;
+	height: 100%;
+	transition-property: clip;
+	transition-duration: 0.45s;
+	transition-timing-function: linear;
+}
+
+.c4-fh,
+.c4-dfill
+{
+	border-radius: 3px;
+}
+
+.c4-pfill
+{
+	background-color: #639922;
+}
+
+.c4-root.ph-warn .c4-pfill
+{
+	background-color: #ef9f27;
+}
+
+.c4-root.ph-crit .c4-pfill
+{
+	background-color: #e24b4a;
+}
+
+/* < 10 s: blinking parts */
+@keyframes 'C4Blink'
+{
+	0% { opacity: 1.0; }
+	50% { opacity: 0.35; }
+	100% { opacity: 1.0; }
+}
+
+.c4-root.ph-crit .c4-blink
+{
+	animation-name: C4Blink;
+	animation-duration: 0.6s;
+	animation-iteration-count: infinite;
+	animation-timing-function: linear;
+}
+
+/* ---------------- 1: text ---------------- */
+
+.c4-t1
+{
+	font-size: 26px;
+	color: #f1efe8;
+	margin-left: 8px;
+	vertical-align: center;
+}
+
+.c4-root.ph-crit .c4-t1
+{
+	color: #f09595;
+}
+
+/* ---------------- 2: bar ---------------- */
+
+.c4-s2
+{
+	width: 200px;
+}
+
+.c4-n2
+{
+	font-size: 15px;
+	color: #f1efe8;
+	vertical-align: center;
+}
+
+.c4-track2
+{
+	margin-top: 5px;
+}
+
+/* ---------------- 3: ring ---------------- */
+
+.c4-s3
+{
+	width: 84px;
+	height: 84px;
+	border-radius: 50%;
+	background-color: #0e1116d0;
+}
+
+.c4-ring
+{
+	width: 70px;
+	height: 70px;
+	horizontal-align: center;
+	vertical-align: center;
+	border-radius: 50%;
+	border: 6px solid #444441;
+}
+
+.c4-ring-fg
+{
+	border: 6px solid #e24b4a;
+	transition-property: clip;
+	transition-duration: 0.45s;
+	transition-timing-function: linear;
+}
+
+.c4-root.ph-ok .c4-ring-fg
+{
+	border: 6px solid #639922;
+}
+
+.c4-root.ph-warn .c4-ring-fg
+{
+	border: 6px solid #ef9f27;
+}
+
+.c4-n3
+{
+	horizontal-align: center;
+	vertical-align: center;
+	text-align: center;
+	font-size: 22px;
+	color: #f1efe8;
+}
+
+/* ---------------- 4: card + defuse marks ---------------- */
+
+.c4-card
+{
+	width: 210px;
+	padding: 8px 10px 8px 10px;
+	background-color: #0e1116d0;
+	border: 1px solid #a32d2d;
+	border-radius: 6px;
+}
+
+.c4-l4
+{
+	font-size: 14px;
+	color: #f1efe8;
+	vertical-align: center;
+	margin-right: 4px;
+}
+
+.c4-sitel
+{
+	color: #fac775;
+}
+
+.c4-n4
+{
+	font-size: 15px;
+	color: #f1efe8;
+	vertical-align: center;
+}
+
+.c4-track4
+{
+	margin-top: 7px;
+}
+
+/* 5 s / 10 s ticks under the bar, moved by margin-left (mk5-K / mk10-K) */
+.c4-ticks
+{
+	width: 100%;
+	height: 6px;
+	margin-top: 2px;
+}
+
+.c4-pfill4
+{
+	background-color: #e24b4a;
+}
+
+.c4-root.ph-ok .c4-pfill4,
+.c4-root.ph-warn .c4-pfill4
+{
+	background-color: #e24b4a;
+}
+
+.c4-mk
+{
+	width: 2px;
+	height: 100%;
+	margin-left: 0px;
+}
+
+.c4-mk5
+{
+	background-color: #85b7eb;
+}
+
+.c4-mk10
+{
+	background-color: #f1efe8;
+}
+
+.c4-legend
+{
+	margin-top: 5px;
+}
+
+.c4-lg5ic
+{
+	width: 14px;
+	height: 14px;
+	margin-right: 4px;
+}
+
+.c4-lg
+{
+	font-size: 12px;
+	vertical-align: center;
+	margin-right: 10px;
+}
+
+.c4-lg5
+{
+	color: #85b7eb;
+}
+
+.c4-lg10
+{
+	color: #b4b2a9;
+}
+
+.c4-root.late10 .c4-mk10
+{
+	background-color: #791f1f;
+}
+
+.c4-root.late10 .c4-lg10
+{
+	color: #a32d2d;
+}
+
+.c4-root.late5 .c4-mk5
+{
+	background-color: #791f1f;
+}
+
+.c4-root.late5 .c4-lg5
+{
+	color: #a32d2d;
+}
+
+.c4-root.late5 .c4-lg5ic
+{
+	wash-color: #a32d2d;
+}
+
+/* ---------------- 5: segments ---------------- */
+
+.c4-segs
+{
+	width: fit-children;
+	height: 10px;
+}
+
+.c4-seglayer
+{
+	width: fit-children;
+	height: 10px;
+	flow-children: right;
+}
+
+.c4-seg
+{
+	width: 8px;
+	height: 10px;
+	margin-right: 3px;
+	border-radius: 2px;
+}
+
+.c4-seg:last-child
+{
+	margin-right: 0px;
+}
+
+.c4-seg-dim .c4-seg
+{
+	background-color: #444441;
+}
+
+.c4-seg-on .c4-seg
+{
+	background-color: #e24b4a;
+}
+
+.c4-root.ph-ok .c4-seg-on .c4-seg
+{
+	background-color: #639922;
+}
+
+.c4-root.ph-warn .c4-seg-on .c4-seg
+{
+	background-color: #ef9f27;
+}
+
+.c4-s5 .c4-row
+{
+	margin-top: 6px;
+}
+
+.c4-n5
+{
+	color: #f1efe8;
+}
+
+/* ---------------- 6: vertical bar ---------------- */
+
+.c4-vtrack
+{
+	width: 10px;
+	height: 96px;
+	border-radius: 5px;
+	background-color: #444441;
+}
+
+.c4-fv
+{
+	border-radius: 5px;
+}
+
+.c4-v6
+{
+	vertical-align: bottom;
+	margin-left: 8px;
+}
+
+.c4-n6
+{
+	font-size: 24px;
+	color: #f1efe8;
+}
+
+.c4-root.ph-crit .c4-n6
+{
+	color: #f09595;
+}
+
+/* ---------------- 8: chip ---------------- */
+
+.c4-chip
+{
+	flow-children: right;
+	border-radius: 4px;
+}
+
+.c4-chip-ic
+{
+	height: 34px;
+	width: 38px;
+	background-color: #a32d2d;
+	border-radius: 4px 0px 0px 4px;
+}
+
+.c4-chip-ic .c4-ic
+{
+	horizontal-align: center;
+}
+
+.c4-chip-t
+{
+	height: 34px;
+	padding: 3px 12px 0px 12px;
+	font-size: 22px;
+	color: #f1efe8;
+	background-color: #2c2c2ae0;
+	border-radius: 0px 4px 4px 0px;
+}
+
+.c4-root.ph-crit .c4-chip-t
+{
+	color: #f09595;
+}
+
+/* ---------------- 9: timer + defuse progress ---------------- */
+
+.c4-s9
+{
+	width: 220px;
+}
+
+.c4-n9
+{
+	font-size: 15px;
+	color: #f1efe8;
+	vertical-align: center;
+}
+
+.c4-track9
+{
+	margin-top: 5px;
+}
+
+.c4-def
+{
+	width: 100%;
+	visibility: collapse;
+	margin-top: 8px;
+}
+
+.c4-root.defusing .c4-def
+{
+	visibility: visible;
+}
+
+.c4-defkit
+{
+	width: 16px;
+	height: 16px;
+	margin-right: 5px;
+	visibility: collapse;
+}
+
+.c4-root.kit .c4-defkit
+{
+	visibility: visible;
+}
+
+.c4-dl
+{
+	font-size: 13px;
+	color: #85b7eb;
+	vertical-align: center;
+}
+
+.c4-dtrack
+{
+	margin-top: 5px;
+}
+
+.c4-dfill
+{
+	background-color: #378add;
+	transition-duration: 0.15s;
+}
+
+.c4-root.def-late .c4-dfill
+{
+	background-color: #888780;
+}
+
+.c4-root.def-late .c4-dl
+{
+	color: #b4b2a9;
+}

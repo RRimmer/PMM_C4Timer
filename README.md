@@ -93,7 +93,7 @@ dotnet build PMM_C4Timer.sln -c Release
 
 ![PMM C4Timer](images/pmm_c4timer-1376x768.jpg)
 
-<h2><a href="https://genesis-cs.space/menuconstructor/index.html">>>>Более подробная информация на сайте<<<</a></h2>
+<h2 align="center"><a href="https://genesis-cs.space/menuconstructor/menumanager/plugins/">GENESIS-CS.SPACE</a></h2>
 
 Таймер C4 на панораме CS2 от **Rimmer**, в стиле плагинов [PanoramaMenuManager](https://github.com/RRimmer/PanoramaMenuManagerCS2).
 
